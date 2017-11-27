@@ -12,7 +12,7 @@ import threading
 import itertools
 import tempfile
 import shutil
-from multiprocessing import Process
+from threading import Thread
 
 services = {}
 loading = False
@@ -252,7 +252,13 @@ def make_dic_xml():
     loading = True        
 
 
+current_progress = 0
+total_tasks = 0
+
+
 def brute(service,port,fname,output):
+    global current_progress
+    global total_tasks
 
     if args.userlist is None and args.username is None:
         userlist = 'wordlist/'+service+'/user'
@@ -284,9 +290,21 @@ def brute(service,port,fname,output):
     out = "[" + colors.green + "+" + colors.normal + "] "
     output_file = output + '/' + service + '-success.txt'
     
- 
+    total_count = None
+
     for line in iter(p.stdout.readline, b''):
-        print line,
+        # print line,
+        if 'ACCOUNT CHECK' in line:
+            current_progress += 1
+
+            if not total_count:
+                total_count = 1
+                words = line.split(' ')
+                for index, word in enumerate(words):
+                    if word == 'of':
+                        total_count *= int(words[index + 1].rstrip(','))
+                total_tasks += total_count
+            print current_progress*1.0/total_tasks
         sys.stdout.flush()
         time.sleep(0.0001)
         if 'SUCCESS' in line:
@@ -295,6 +313,7 @@ def brute(service,port,fname,output):
             f.close()    
    
 def animate():
+        return
         t_end = time.time() + 2
         for c in itertools.cycle(['|', '/', '-', '\\']):
             if not time.time() < t_end:
@@ -306,6 +325,7 @@ def animate():
         time.sleep(1)
 
 def loading():
+    return
     for c in itertools.cycle(['|', '/', '-', '\\']):
         if loading == True:
             break
@@ -331,7 +351,8 @@ def parse_args():
     menu_group.add_argument('-u', '--username', help="specify a single username", default=None)
     menu_group.add_argument('-p', '--password', help="specify a single password", default=None)
     menu_group.add_argument('-c', '--continuous', help="keep brute-forcing after success", default=False, action='store_true')
-    menu_group.add_argument('-i', '--interactive', help="interactive mode", default=False, action='store_true')    
+    menu_group.add_argument('-i', '--interactive', help="interactive mode", default=False, action='store_true')
+    menu_group.add_argument('-a', '--progress', help="print the current progress", default=False, action='store_true')
 
     argcomplete.autocomplete(parser)    
     args = parser.parse_args()
@@ -339,7 +360,7 @@ def parse_args():
     return args
 
 if __name__ == "__main__":
-    print(banner)
+    # print(banner)
     args = parse_args()
 
     #temporary directory for ip addresses
@@ -382,8 +403,8 @@ if __name__ == "__main__":
                 for ip in iplist:
                     f.write(ip + '\n')
                 f.close()
-                brute_process = Process(target=brute, args=(service,port,fname,args.output))
-                brute_process.start()
+                brute_thread = Thread(target=brute, args=(service,port,fname,args.output))
+                brute_thread.start()
 
     #need to wait for all of the processes to run...
     #shutil.rmtree(tmppath, ignore_errors=False, onerror=None)
